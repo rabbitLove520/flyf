@@ -1,7 +1,8 @@
-# cmake_minimum_required(VERSION <specify CMake version here>)
+cmake_minimum_required(VERSION 3.20)
+
 project(flyf C)
 
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD 17)
 
 aux_source_directory(. DIR_SRCS)
 

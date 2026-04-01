@@ -1,142 +1,197 @@
 #include "common.h"
 
+/* ==================== 命令列表 ==================== */
 static const char commandlist[NCOMMANDS][10] =
 {
-	"get",
-	"put",
-
-	"mget",
-	"mput",
-	"delete",
-	
-	"cd",
-	"lcd",
-	
-	"mgetwild",
-	"mputwild",
-	
-	"dir",
-	"ldir",
-
-	"ls",
-	"lls",
-	
-	"mkdir",
-	"lmkdir",
-
-	"rget",
-	"rput",
-	
-	"pwd",
-	"lpwd",
-	"ascii",
-	"binary",
-	"open",
-	"help",
-	"quit",
-	"exit"
+    "get", "put", "mget", "mput", "delete",
+    "cd", "lcd", "mgetwild", "mputwild",
+    "dir", "ldir", "ls", "lls",
+    "mkdir", "lmkdir", "rget", "rput",
+    "pwd", "lpwd", "ascii", "binary",
+    "open", "help", "quit", "exit"
 };
 
-
+/* ==================== 全局变量定义 ==================== */
 unsigned short login_time = 0;
 bool server_connected = false;
 char cmd_read[CMD_READ_BUFFER_SIZE];
 
+/* ==================== 工具函数 ==================== */
+
+/**
+ * @brief 将内存区域设置为0
+ * @param p 目标内存指针
+ * @param size 内存大小
+ */
 void set0(char *p, size_t size)
 {
-	memset(p, 0, size);
+    if (p != NULL && size > 0) {
+        memset(p, 0, size);
+    }
 }
 
-
-static void append_path(struct command* c, char* s)
+/**
+ * @brief 追加路径到命令结构
+ * @param c 命令结构指针
+ * @param s 路径字符串
+ * @return 成功返回0，失败返回-1
+ */
+static int append_path(struct command* c, const char* s)
 {
-	c->npaths++;
-	char** temppaths = (char**) malloc(c->npaths * sizeof(char*));
-	if(c->npaths > 1)
-		memcpy(temppaths, c->paths, (c->npaths - 1) * sizeof(char*));
+    if (c == NULL || s == NULL) {
+        return -1;
+    }
+    
+    c->npaths++;
+    
+    /* 重新分配路径数组 */
+    char** temppaths = (char**)realloc(c->paths, c->npaths * sizeof(char*));
+    if (temppaths == NULL) {
+        c->npaths--;
+        return -1;
+    }
+    c->paths = temppaths;
 
-	char* temps = (char*) malloc((strlen(s) + 1) * sizeof(char));
-	int i;
-	for(i = 0; *(temps + i) = *(s + i) == ':' ? ' ' : *(s + i); i++)
-		;
+    /* 分配并复制路径字符串 */
+    size_t len = strlen(s) + 1;
+    char* temps = (char*)malloc(len * sizeof(char));
+    if (temps == NULL) {
+        c->npaths--;
+        return -1;
+    }
+    
+    /* 复制字符串，将冒号替换为空格 */
+    size_t i;
+    for (i = 0; i < len - 1; i++) {
+        temps[i] = (s[i] == ':') ? ' ' : s[i];
+    }
+    temps[len - 1] = '\0';
 
-	*(temppaths + c->npaths - 1) = temps;
-
-	c->paths = temppaths;
+    c->paths[c->npaths - 1] = temps;
+    return 0;
 }
 
-struct command*  userinputtocommand(char s[LENUSERINPUT])
+/**
+ * @brief 将用户输入解析为命令结构
+ * @param s 用户输入字符串
+ * @return 命令结构指针，失败返回NULL
+ */
+struct command* userinputtocommand(char s[LENUSERINPUT])
 {
-	struct command* cmd = (struct command*) malloc(sizeof(struct command));
-	cmd->id = -1;
-	cmd->npaths = 0;
-	cmd->paths = NULL;
-	char* savestate;
-	char* token;
-	int i, j;
-	for(i = 0; ; i++, s = NULL)
-	{
-		token = strtok_r(s, " \t\n", &savestate);
-		if(token == NULL)
-			break;
-		if(cmd->id == -1)
-			for(j = 0; j < NCOMMANDS; j++)
-			{	
-				if(!strcmp(token, commandlist[j]))
-				{
-					cmd->id = j;
-					break;
-				}
-			}// ommitting braces for the "for loop" here is \
-			 disastrous because the else below gets \
-			 associated with the "if inside the for loop". \
-			 #BUGFIX
-		else
-			append_path(cmd, token);
-	}
-	if(cmd->id == MGET && !strcmp(*cmd->paths, "*"))
-		cmd->id = MGETWILD;
-	else if(cmd->id == MPUT && !strcmp(*cmd->paths, "*"))
-		cmd->id = MPUTWILD;
-	if(cmd->id != -1)
-		return cmd;
-	else
-	{
-		return NULL;
-	}
+    if (s == NULL) {
+        return NULL;
+    }
+    
+    struct command* cmd = (struct command*)malloc(sizeof(struct command));
+    if (cmd == NULL) {
+        return NULL;
+    }
+    
+    cmd->id = -1;
+    cmd->npaths = 0;
+    cmd->paths = NULL;
+    
+    char* savestate = NULL;
+    char* token = NULL;
+    char* input_copy = strdup(s);  /* 复制输入，避免修改原字符串 */
+    
+    if (input_copy == NULL) {
+        free(cmd);
+        return NULL;
+    }
+    
+    int i, j;
+    for (i = 0; ; i++, input_copy = NULL)
+    {
+        token = strtok_r(input_copy, " \t\n", &savestate);
+        if (token == NULL)
+            break;
+            
+        if (cmd->id == -1) {
+            for (j = 0; j < NCOMMANDS; j++) {
+                if (strcmp(token, commandlist[j]) == 0) {
+                    cmd->id = j;
+                    break;
+                }
+            }
+        } else {
+            if (append_path(cmd, token) < 0) {
+                free(input_copy);
+                freecommand(cmd);
+                return NULL;
+            }
+        }
+    }
+    
+    free(input_copy);
+    
+    /* 处理通配符命令 */
+    if (cmd->id == MGET && cmd->npaths > 0 && strcmp(cmd->paths[0], "*") == 0)
+        cmd->id = MGETWILD;
+    else if (cmd->id == MPUT && cmd->npaths > 0 && strcmp(cmd->paths[0], "*") == 0)
+        cmd->id = MPUTWILD;
+    
+    if (cmd->id != -1)
+        return cmd;
+    else {
+        freecommand(cmd);
+        return NULL;
+    }
 }
 
-
+/**
+ * @brief 打印命令结构内容（调试用）
+ * @param c 命令结构指针
+ */
 void printcommand(struct command* c)
 {
-	
-	printf("\t\tPrinting contents of the above command...\n");
-	printf("\t\tid = %d\n", c->id);
-	printf("\t\tnpaths = %d\n", c->npaths);
-	printf("\t\tpaths =\n");
-	int i;
-	for(i = 0; i < c->npaths; i++)
-		printf("\t\t\t%s\n", c->paths[i]);
-	printf("\n");
+    if (c == NULL) return;
+    
+    printf("\tPrinting contents of the above command...\n");
+    printf("\tid = %d\n", c->id);
+    printf("\tnpaths = %d\n", c->npaths);
+    printf("\tpaths =\n");
+    for (int i = 0; i < c->npaths; i++) {
+        if (c->paths[i] != NULL)
+            printf("\t\t%s\n", c->paths[i]);
+    }
+    printf("\n");
 }
 
+/**
+ * @brief 释放命令结构内存
+ * @param c 命令结构指针
+ */
 void freecommand(struct command* c)
 {
-	if (c->npaths > 0)
-	{
-		int i;
-		// free strings
-		for(i = 0; i < c->npaths; i++)
-			free(c->paths[i]);
-		free(c->paths);
-	}
-	free(c);
+    if (c == NULL) return;
+    
+    if (c->npaths > 0 && c->paths != NULL) {
+        for (int i = 0; i < c->npaths; i++) {
+            if (c->paths[i] != NULL) {
+                free(c->paths[i]);
+                c->paths[i] = NULL;
+            }
+        }
+        free(c->paths);
+        c->paths = NULL;
+    }
+    free(c);
 }
 
-// 客户端打开任意的本地端口 (N > 1024) 
-unsigned short get_rand_port()
+/**
+ * @brief 获取随机端口（用于数据连接）
+ * @return 随机端口号 (10000-60000)
+ */
+unsigned short get_rand_port(void)
 {
-    srand((unsigned) time(NULL));
-    unsigned int number = rand() % 101 + 1; // 产生1-101的随机数
-    return number + 1024;
+    static bool seeded = false;
+    if (!seeded) {
+        srand((unsigned int)time(NULL) ^ (unsigned int)getpid());
+        seeded = true;
+    }
+    
+    unsigned int range = PORT_RANGE_MAX - PORT_RANGE_MIN + 1;
+    unsigned int number = rand() % range;
+    return (unsigned short)(number + PORT_RANGE_MIN);
 }
