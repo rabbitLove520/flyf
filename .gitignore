@@ -1,2 +1,4 @@
 *.o
 /ftp
+build
+dist

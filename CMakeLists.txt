@@ -4,6 +4,6 @@ project(flyf C)
 
 set(CMAKE_C_STANDARD 17)
 
-aux_source_directory(. DIR_SRCS)
+aux_source_directory(./src DIR_SRCS)
 
 add_executable(ftp ${DIR_SRCS})

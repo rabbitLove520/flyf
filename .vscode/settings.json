@@ -2,5 +2,6 @@
     "files.associations": {
         "cmds.h": "c",
         "encode.h": "c"
-    }
+    },
+    "cmake.sourceDirectory": "/wsl.localhost/Ubuntu-22.04/home/rabbit/flyf"
 }

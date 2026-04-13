@@ -4,7 +4,8 @@
 
 # 使用
 
-1. `make` 编译代码
+1. `mkdir build && cd build && cmake ..`
+2. `make -j` 编译代码
 2. `./ftp ip port` 连接 ftp 服务器
 
 # 常见 FTP 命令
